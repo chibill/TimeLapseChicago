@@ -1,0 +1,6 @@
+{
+    "chi1":{"wait":10,"url":"https://www.glerl.noaa.gov/metdata/chi/chi1.jpg","fps":5},
+    "chi2":{"wait":10,"url":"https://www.glerl.noaa.gov/metdata/chi/chi2.jpg","fps":5},
+    "chi3":{"wait":10,"url":"https://www.glerl.noaa.gov/metdata/chi/chi3.jpg","fps":5},
+    "loopscape":{"wait":2,"url":"http://cdn.abclocal.go.com/three/wls/webcam/Loopscape.jpg","fps":15}
+}
