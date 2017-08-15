@@ -1,9 +1,10 @@
 from six.moves.urllib import request
 from six.moves import input
 from threading import Timer
-from threading import enumerate as Threads
+from PIL import Image
 import time
 import json
+
 from glob import glob
 import os
 import datetime
@@ -16,10 +17,8 @@ AnimateTimer = None
 
 def downloadImage(URL,saveLoc):
     url = request.urlopen(URL)
-    file = open(saveLoc+"/"+str(int(time.time()))+".jpg","wb+")
-    file.write(url.read())
-    file.flush()
-    file.close()
+    img = Image.open(url)
+    img.save(saveLoc+"/"+str(int(time.time()))+".jpg",optimize=True,progressive=True,quality=60)
     url.close()
 
 class RepeatingDownload(object):
@@ -67,7 +66,7 @@ def animate(cams):
             for y in glob(x+"/"+"*.jpg"):
                 try:
                     image = imageio.imread(y)
-                    writer.append_data(y)
+                    writer.append_data(image)
                 except Exception as e:
                     log = logging.getLogger("Animate")
                     log.setLevel(LogLevel)
@@ -137,10 +136,7 @@ def main():
             log.info("stopcam: Stops a cameras recording.")
             log.info("startcam: Starts a camera recording.")
             log.info("stop: Stops this program.")
-        elif command == "list-threads":
-            log.info("Active Threads")
-            for x in Threads():
-                log.info(x.getName())
+       
         else:
             log.error("Command not found! " +command)
             
