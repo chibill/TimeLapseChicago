@@ -23,12 +23,11 @@
  
 
 ## Storage System.
-   ### Currently the images for the frames are stored raw as .jpegs. A more suitable format will be desiered.
-    
-      Currently working on long term storage being MP4 files as it can compress a set of frames that are very alike by up to 70%
-    
-   ### The video is updated hourly and it is stored as a .mp4 which might not be the best format for it.
-    
+   Currently using .jpg images file for raw images that everyday at midnight (Chicago Time) are converted to a single .mp4 video.
+   This video has all the frames in order and the video is named using python's time.time().
+   
+   Aditionally a cat.json file holds the timestamps of each video's frames in order of there apparence in the video.
+   
 ## Host?
    Currently this is all hosted off my personal server. Which has a HTTP server set up on it.
    Having some sort of nicer web interface would be nice.
