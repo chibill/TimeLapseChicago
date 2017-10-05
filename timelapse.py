@@ -1,87 +1,141 @@
-from six.moves.urllib import request
-from six.moves import input
+import requests
 from threading import Timer
-from PIL import Image
+import logging
 import time
 import json
-
+from six.moves import input
 from glob import glob
+import livejson
+from moviepy.editor import ImageSequenceClip
 import os
-import datetime
-import imageio
-import logging
+
+"""
+cams.json Docs
+
+
+Each entry consists of a URL, Detetion Type , and finally a FPS (For end of day storage video)
+
+Valid entries for type are as follows.
+
+
+max-age which uses the max-age argument of the Cache-Control tag in the header to wait.
+etag which uses the ETag argument in the header to decide if it is needed to download.
+max-age-etag uses both ETag and max-age methods. (For those stuborn URLS)
+
+Example
+
+{'cam1':{'url':'http://example.com','type':'max-age','fps':10}}
+
+"""
 
 LogLevel = 20
 
-AnimateTimer = None
 
-def downloadImage(URL,saveLoc):
-    url = request.urlopen(URL)
-    img = Image.open(url)
-    img.save(saveLoc+"/"+str(int(time.time()))+".jpg",optimize=True,progressive=True,quality=60)
-    url.close()
-
-class RepeatingDownload(object):
-    def __init__(self, interval,url,saveLoc,start):
-        logging.getLogger(saveLoc).setLevel(LogLevel)
+class MaxAgeDownload(object):
+    def __init__(self, url,name):
+        logging.getLogger(name).setLevel(LogLevel)
         self._timer     = None
-        self.interval   = interval
-        self.function   = downloadImage
         self.url        = url
-        self.saveLoc    = saveLoc
         self.is_running = False
-        self._timer = Timer(self.interval, self._run)
-        self._timer.setName(self.saveLoc)
-        self.restart(start)
+        self.name = name
+        self.maxage = 1
+        self._timer = Timer(self.maxage, self._run)
+        self._timer.setName(self.name)
 
     def _run(self):
         self.is_running = False
+        rep = requests.get(self.url,stream=True)
+        logging.getLogger(self.name).info("Downloading new Image.")
+        self.maxage = int(rep.headers["Cache-Control"].split("max-age=")[1].split(",")[0]) #Get the max-age using some hacky split strings
         self.start()
-        self.function(self.url,self.saveLoc)
-        logging.getLogger(self.saveLoc).info("Downloading new Image.")
+        img = open(self.name+"/"+str(int(time.time()))+".jpg","wb+")
+        img.write(rep.raw.read())
+        img.close()
 
     def start(self):
-        logging.getLogger(self.saveLoc).debug("Start called!")
         if not self.is_running:
-            self._timer = Timer(self.interval, self._run)
-            self._timer.setName(self.saveLoc)
+            self._timer = Timer(self.maxage, self._run)
+            self._timer.setName(self.name)
             self._timer.start()
             self.is_running = True
-        
-    def restart(self,start):
-        self._starttimer = Timer((start-datetime.datetime.now()).seconds, self.start)
-        self._starttimer.setName(self.saveLoc)
-        self._starttimer.start()
-    
             
     def stop(self):
-        self._starttimer.cancel()
         self._timer.cancel()
         self.is_running = False
- 
-def animate(cams):
-    global AnimateTimer
-    for x in cams.keys():
-        with imageio.get_writer(x+'.mp4', mode='I',fps=cams[x]["fps"],ffmpeg_log_level="quiet") as writer:
-            for y in glob(x+"/"+"*.jpg"):
-                try:
-                    image = imageio.imread(y)
-                    writer.append_data(image)
-                except Exception as e:
-                    log = logging.getLogger("Animate")
-                    log.setLevel(LogLevel)
-                    log.error("Could not read Image"+x+"/"+y+"!")
-                    log.error("Exception: "+str(e))
-    AnimateTimer = Timer(60*60,animate,args=[cams])
-    AnimateTimer.setName("Animate")
-    AnimateTimer.start()
-    
-    
+        
+class ETagDownload(object):
+    def __init__(self, url,name):
+        logging.getLogger(name).setLevel(LogLevel)
+        self._timer     = None
+        self.url        = url
+        self.is_running = False
+        self.name = name
+        self.ETag = ""
+        self._timer = Timer(1, self._run)
+        self._timer.setName(self.name)
+
+    def _run(self):
+        self.is_running = False
+        rep = requests.get(self.url,stream=True,headers={"If-None-Match":self.ETag})
+        
+        if rep.status_code == 200:
+            logging.getLogger(self.name).info("Downloading new Image.")
+            self.ETag = rep.headers["ETag"]
+            img = open(self.name+"/"+str(int(time.time()))+".jpg","wb+")
+            img.write(rep.raw.read())
+            img.close()
+        self.start()
+
+    def start(self):
+        if not self.is_running:
+            self.is_running = True
+            self._timer = Timer(60, self._run)
+            self._timer.setName(self.name)
+            self._timer.start()
+            
+            
+    def stop(self):
+        self._timer.cancel()
+        self.is_running = False       
+
+class MaxAgeETagDownload(object):
+    def __init__(self, url,name):
+        logging.getLogger(name).setLevel(LogLevel)
+        self._timer     = None
+        self.url        = url
+        self.is_running = False
+        self.name = name
+        self.etag = ""
+        self.maxage = 1
+        self._timer = Timer(self.maxage, self._run)
+        self._timer.setName(self.name)
+
+    def _run(self):
+        self.is_running = False
+        rep = requests.get(self.url,stream=True)
+        logging.getLogger(self.name).info("Downloading new Image.")
+        self.maxage = int(rep.headers["Cache-Control"].split("max-age=")[1].split(",")[0]) #Get the max-age using some hacky split strings
+        self.start()
+        if not self.etag == rep.headers["ETag"]:
+            img = open(self.name+"/"+str(int(time.time()))+".jpg","wb+")
+            img.write(rep.raw.read())
+            img.close()
+        self.etag = rep.headers["ETag"]
+
+    def start(self):
+        if not self.is_running:
+            self._timer = Timer(self.maxage, self._run)
+            self._timer.setName(self.name)
+            self._timer.start()
+            self.is_running = True
+            
+    def stop(self):
+        self._timer.cancel()
+        self.is_running = False
+        
+
     
 def main():
-    global AnimateTimer
-    now = datetime.datetime.now()
-    start = datetime.datetime(now.year,now.month,now.day,now.hour+1)
     logging.basicConfig(format = '%(asctime)s [%(name)s] [%(levelname)s] %(message)s')
     log = logging.getLogger("TimeLapse")
     log.setLevel(LogLevel)
@@ -95,18 +149,24 @@ def main():
     for x in cameras.keys():
         try:
             os.mkdir(x)
+            os.mkdir(x+"-mp4")
         except Exception as e:
             log.error("Could not create folder "+x+"!")
             log.error("Exception: "+str(e))
         log.info("Added Camera "+x)
-        cameras[x]["instance"] = RepeatingDownload(cameras[x]["wait"]*60,cameras[x]["url"],x,start)
-    animate(cameras)
+        if cameras[x]["type"] == "etag":
+            cameras[x]["instance"] = ETagDownload(cameras[x]["url"],x)
+        if cameras[x]["type"] == "max-age":
+            cameras[x]["instance"] = MaxAgeDownload(cameras[x]["url"],x) 
+        if cameras[x]["type"] == "max-age-etag":
+            cameras[x]["instance"] = MaxAgeETagDownload(cameras[x]["url"],x)
+        cameras[x]["instance"].start()
     
     while True:
         command = input(">")
         if command == "list-cams":
             for x in cameras.keys():
-                log.info(x +": Running? "+str(cameras[x]["instance"].is_running) +" Waiting? "+str(cameras[x]["instance"]._starttimer.is_alive()))
+                log.info(x +": Running? "+str(cameras[x]["instance"].is_running))
         elif command.startswith("stopcam"):
             cam = command.split(" ")[1]
             if not cam in cameras.keys():
@@ -120,15 +180,36 @@ def main():
             if not cam in cameras.keys():
                 log.error("Invalid Camera name")
             else:
-                log.info("Camera "+cam+" schedualed to start!")
-                now = datetime.datetime.now()
-                start = datetime.datetime(now.year,now.month,now.day,now.hour+1)
-                cameras[cam]["instance"].restart(start)
+                log.info("Camera "+cam+" started!")
+                cameras[cam]["instance"].start()
+        elif command.startswith("save"):
+            for x in cameras.keys():
+                cameras[x]["instance"].stop()
+            log.info("All Camers Stopped!")  
+            for x in cameras.keys():
+                log.info("Saving "+x)
+                data = livejson.File(x+"-mp4/cat.json")
+                t = str(int(time.time()))
+                q = ImageSequenceClip(x,fps=cameras[x]["fps"])
+                q.write_videofile(x+"-mp4/"+t+".mp4")
+                data[t]=glob(x+"/*.jpg")
+                for y in glob(x+"/*.jpg"):
+                    os.remove(y)
+            log.info("All Cameras started!")
+            for x in cameras.keys():
+                cameras[x]["instance"].start()
+        elif command.startswith("stopcams"):
+            for x in cameras.keys():
+                cameras[x]["instance"].stop()
+            log.info("All Camers Stopped!")  
+        elif command.startswith("startcams"):
+            for x in cameras.keys():
+                cameras[x]["instance"].start()
+            log.info("All Camers Stopped!")  
         elif command == "stop":
             log.info("Stopping all cameras and halting!")
             for x in cameras.keys():
                 cameras[x]["instance"].stop()
-            AnimateTimer.cancel()
             break
         elif command == "help": 
             log.info("help: Shows this.")

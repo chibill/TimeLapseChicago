@@ -1,6 +1,6 @@
 {
-    "chi1":{"wait":10,"url":"https://www.glerl.noaa.gov/metdata/chi/chi1.jpg","fps":5},
-    "chi2":{"wait":10,"url":"https://www.glerl.noaa.gov/metdata/chi/chi2.jpg","fps":5},
-    "chi3":{"wait":10,"url":"https://www.glerl.noaa.gov/metdata/chi/chi3.jpg","fps":5},
-    "loopscape":{"wait":2,"url":"http://cdn.abclocal.go.com/three/wls/webcam/Loopscape.jpg","fps":15}
+    "chi1":{"url":"https://www.glerl.noaa.gov/metdata/chi/chi1.jpg","fps":2,"type":"etag"},
+    "chi2":{"url":"https://www.glerl.noaa.gov/metdata/chi/chi2.jpg","fps":2,"type":"etag"},
+    "chi3":{"url":"https://www.glerl.noaa.gov/metdata/chi/chi3.jpg","fps":2,"type":"etag"},
+    "loopscape":{"url":"http://cdn.abclocal.go.com/three/wls/webcam/Loopscape.jpg","fps":5,"type":"max-age-etag"}
 }
